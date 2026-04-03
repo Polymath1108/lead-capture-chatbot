@@ -48,6 +48,7 @@ export function useChat() {
             })),
             conversationId: conversationId.current,
             leadCapturePromptShown,
+            leadSubmitted,
           }),
         });
 

@@ -9,6 +9,7 @@ export const chatApiRequestSchema = z.object({
   messages: z.array(messageSchema).min(1),
   conversationId: z.string().uuid(),
   leadCapturePromptShown: z.boolean().optional().default(false),
+  leadSubmitted: z.boolean().optional().default(false),
 });
 
 export const leadFormSchema = z.object({

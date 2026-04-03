@@ -26,6 +26,7 @@ export interface ChatApiRequest {
   messages: Array<{ role: MessageRole; content: string }>;
   conversationId: string;
   leadCapturePromptShown?: boolean;
+  leadSubmitted?: boolean;
 }
 
 export interface ChatApiResponse {

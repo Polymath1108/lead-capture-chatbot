@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { messages, conversationId, leadCapturePromptShown } = parsed.data;
+    const { messages, conversationId, leadCapturePromptShown, leadSubmitted } = parsed.data;
 
     // Persist conversation (simulated)
     await saveConversation(conversationId, messages);
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
                 {
                   role: "system" as const,
                   content:
-                    "The lead capture popup has already been shown once. Do not ask for name, email, or phone again. Continue naturally with one concise follow-up question and practical next-step guidance.",
+                    "The lead capture popup has already been shown once. Do not request popup reopening. If contact details are still missing, ask naturally in chat for only the missing fields (name, email, or phone). Keep it short and ask one question.",
                 },
               ]
             : []),
@@ -57,11 +57,15 @@ export async function POST(request: NextRequest) {
     } catch (openAiError) {
       // Graceful fallback when no valid API key
       console.warn("[OpenAI] API error — using fallback response:", openAiError);
-      aiMessage = getFallbackResponse(userTurnCount, leadCapturePromptShown);
+      aiMessage = getFallbackResponse(userTurnCount, leadCapturePromptShown, leadSubmitted);
     }
 
     // Detect and strip the lead-form trigger token
-    if (aiMessage.includes(COLLECT_LEAD_TOKEN) && !leadCapturePromptShown) {
+    if (
+      aiMessage.includes(COLLECT_LEAD_TOKEN) &&
+      !leadCapturePromptShown &&
+      !leadSubmitted
+    ) {
       showLeadForm = true;
     }
     aiMessage = aiMessage.replace(COLLECT_LEAD_TOKEN, "").trim();
@@ -70,12 +74,23 @@ export async function POST(request: NextRequest) {
     if (
       !leadCapturePromptShown &&
       !showLeadForm &&
+      !leadSubmitted &&
       leadCollectionReady &&
       userTurnCount >= 2 &&
       missingContactFields.length > 0
     ) {
       showLeadForm = true;
       aiMessage = ensureMissingContactPrompt(aiMessage, missingContactFields);
+    }
+
+    if (
+      leadCapturePromptShown &&
+      !leadSubmitted &&
+      missingContactFields.length > 0
+    ) {
+      // After first popup, continue contact collection naturally in chat.
+      aiMessage = ensureMissingContactPrompt(aiMessage, missingContactFields);
+      showLeadForm = false;
     }
 
     aiMessage = limitResponseLength(aiMessage, showLeadForm ? 5 : 4);
@@ -96,14 +111,15 @@ export async function POST(request: NextRequest) {
 
 function getFallbackResponse(
   userTurnCount: number,
-  leadCapturePromptShown: boolean
+  leadCapturePromptShown: boolean,
+  leadSubmitted: boolean
 ): string {
-  if (leadCapturePromptShown) {
+  if (leadCapturePromptShown && !leadSubmitted) {
     const naturalResponses = [
-      "Thanks for sharing that. What part of this feels most urgent for you right now?",
-      "That makes sense. Have you already tried anything so far, or is this your first step?",
-      "Got it. The next step is to gather any key documents or dates tied to this issue. What detail do you want help clarifying first?",
-      "You’re on the right track. Would you like me to help you outline the first two actions to take today?",
+      "Thanks for sharing that. To keep helping you, could you share the missing contact details?",
+      "Got it. Could you also share the missing contact details so we can follow up properly?",
+      "That helps a lot. Please share the remaining contact details, and then I can guide your next step.",
+      "We’re close. Could you share any remaining contact details so we can proceed?",
     ];
     const naturalIndex = Math.min(userTurnCount - 1, naturalResponses.length - 1);
     return naturalResponses[naturalIndex] ?? naturalResponses[naturalResponses.length - 1];
