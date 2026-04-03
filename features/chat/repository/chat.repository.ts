@@ -86,22 +86,42 @@ function extractSummary(
 export function extractContactDetails(
   messages: Array<{ role: MessageRole; content: string }>
 ): Partial<{ name: string; email: string; phone: string }> {
-  const userText = messages
-    .filter((message) => message.role === "user")
-    .map((message) => message.content)
-    .join(" ");
+  const userMessages = messages.filter((message) => message.role === "user");
+  const userText = userMessages.map((message) => message.content).join(" ");
+  const latestUserMessage = userMessages[userMessages.length - 1]?.content?.trim() ?? "";
 
   const emailMatch = userText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   const phoneMatch = userText.match(
     /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,4}/
   );
-  const nameMatch = userText.match(
-    /\b(?:my name is|i am|i'm|this is)\s+([A-Za-z][A-Za-z\s'-]{1,50})/i
+  const explicitNameMatch = userText.match(
+    /\b(?:my name is|i am|i'm|this is|it is|it's|call me)\s+([A-Za-z][A-Za-z\s'-]{1,50})/i
   );
+  const inferredName = inferShortName(latestUserMessage);
 
   return {
     email: emailMatch?.[0]?.trim(),
     phone: phoneMatch?.[0]?.trim(),
-    name: nameMatch?.[1]?.trim(),
+    name: explicitNameMatch?.[1]?.trim() ?? inferredName,
   };
+}
+
+function inferShortName(input: string): string | undefined {
+  if (!input) return undefined;
+
+  const cleaned = input.replace(/[.,!?]+$/g, "").trim();
+  if (!cleaned || cleaned.includes("@") || /\d/.test(cleaned)) {
+    return undefined;
+  }
+
+  // Capture compact name-only responses, e.g. "Satoshi" or "Satoshi Nakamoto".
+  const simpleNamePattern = /^[A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2}$/;
+  if (cleaned.length <= 40 && simpleNamePattern.test(cleaned)) {
+    return cleaned;
+  }
+
+  const introNameMatch = cleaned.match(
+    /^(?:i am|i'm|this is|it is|it's)\s+([A-Za-z][A-Za-z\s'-]{1,50})$/i
+  );
+  return introNameMatch?.[1]?.trim();
 }

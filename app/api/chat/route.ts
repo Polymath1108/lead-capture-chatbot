@@ -191,6 +191,15 @@ function ensureMissingContactPrompt(
     missingFields.map((field) => fieldLabelMap[field])
   );
   const lower = trimmed.toLowerCase();
+  const requestedFields = getRequestedContactFields(lower);
+  const asksUnexpectedField = requestedFields.some(
+    (field) => !missingFields.includes(field)
+  );
+
+  if (asksUnexpectedField) {
+    return `To move forward, please share your ${missingFieldsLabel} so we can connect you with the right next step.`;
+  }
+
   const alreadyAsksForAllMissing = missingFields.every((field) =>
     lower.includes(fieldLabelMap[field])
   );
@@ -200,6 +209,18 @@ function ensureMissingContactPrompt(
   }
 
   return `${trimmed} To move forward, please share your ${missingFieldsLabel} so we can connect you with the right next step.`;
+}
+
+function getRequestedContactFields(
+  text: string
+): Array<"name" | "email" | "phone"> {
+  const requested: Array<"name" | "email" | "phone"> = [];
+
+  if (text.includes("name")) requested.push("name");
+  if (text.includes("email") || text.includes("e-mail")) requested.push("email");
+  if (text.includes("phone") || text.includes("number")) requested.push("phone");
+
+  return requested;
 }
 
 function getMissingContactFields(details: Partial<{ name: string; email: string; phone: string }>) {
